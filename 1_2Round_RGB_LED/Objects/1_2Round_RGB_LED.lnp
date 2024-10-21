@@ -1,0 +1,4 @@
+".\Objects\STARTUP.obj",
+".\Objects\main.obj" 
+TO ".\Objects\1_2Round_RGB_LED" 
+PRINT(".\Listings\1_2Round_RGB_LED.m51") RAMSIZE(256) 

@@ -1,0 +1,1 @@
+"Driver\softiic.c" OPTIMIZE (8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\softiic.lst) TABS (2) OBJECT(.\Objects\softiic.obj)

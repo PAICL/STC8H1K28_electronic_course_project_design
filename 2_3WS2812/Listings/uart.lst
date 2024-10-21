@@ -1,0 +1,13 @@
+C51 COMPILER V9.60.7.0   UART                                                              10/19/2024 22:47:56 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE UART
+OBJECT MODULE PLACED IN .\Objects\uart.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE Driver\uart.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listin
+                    -gs\uart.lst) TABS(2) OBJECT(.\Objects\uart.obj)
+
+line level    source
+
+*** ERROR C318 OF Driver\uart.c: can't open file 'Driver\uart.c'
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  1 ERROR(S)

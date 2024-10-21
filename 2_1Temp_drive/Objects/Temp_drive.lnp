@@ -1,0 +1,3 @@
+".\Objects\main.obj" 
+TO ".\Objects\Temp_drive" 
+PRINT(".\Listings\Temp_drive.m51") RAMSIZE(256) 

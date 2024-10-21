@@ -1,0 +1,811 @@
+C51 COMPILER V9.60.7.0   MAIN                                                              10/21/2024 15:57:05 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\main
+                    -.lst) TABS(2) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          /*===============================================================
+   2          该项目基于STC8H1K28以及官方程序代码进行开发
+   3          
+   4          该项目为通过串口控制开发板上LED三色灯以及两颗WS2812彩灯
+   5            可执行指令：
+   6            LEDA# 打开三色LED
+   7            SHUT# 关闭所有灯
+   8            LEDB# 打开三色LED的蓝灯
+   9            LEDR# 打开三色LED的红灯
+  10            LEDG# 打开三色LED的绿灯
+  11            RALL# 打开两个WS2812
+  12            RAO1# 打开第一个WS2812（R:RGB, A:Null, O:Open, 1:第一个灯，下同理）
+  13            RAO2# 打开第二个WS2812
+  14            RAC1# 关闭第一个WS2812（R:RGB, A:Null, C:Cancel, 1:第一个灯，下同理）
+  15            RAC2# 关闭第一个WS2812
+  16            RGB1# 同RAO1#
+  17            RGB2# 同RAO2#
+  18            RGBR# 打开第一个WS2812红灯（大写表示第一个灯，小写表示第二个灯）
+  19            RGBG# 打开第一个WS2812绿灯（R:Red, G：Green, B:Blue）
+  20            RGBB# 打开第一个WS2812蓝灯
+  21            RGBr# 打开第二个WS2812红灯
+  22            RGBg# 打开第二个WS2812红灯
+  23            RGBb# 打开第二个WS2812红灯
+  24          
+  25          下载烧录时需要将频率设置为22.1184MHz，否则无法运行
+  26          Warning产生原因是有冗余的代码函数未使用，不影响程序编译成功
+  27          如因该问题无法编译，请根据Warning原因自行删除多余的功能函数
+  28          Data:2024/10/20
+  29          *///===============================================================
+  30          
+  31          #include "stc8h.h"
+  32          #include "intrins.h"
+  33          #include "string.h"
+  34          #define MAIN_Fosc 22118400L // 定义主时钟（精确计算115200波特率）
+  35          // #define MAIN_Fosc 24000000L // 定义主时钟（精确计算115200波特率）
+  36          
+  37          //========================================================================
+  38          //                               类型定义
+  39          //========================================================================
+  40          typedef unsigned char u8;   //  8 bits
+  41          typedef unsigned int u16;   // 16 bits
+  42          typedef unsigned long u32;    // 32 bits
+  43          typedef signed char int8;   //  8 bits
+  44          typedef signed int int16;   // 16 bits
+  45          typedef signed long int32;    // 32 bits
+  46          typedef unsigned char uint8;  //  8 bits
+  47          typedef unsigned int uint16;  // 16 bits
+  48          typedef unsigned long uint32; // 32 bits
+  49          #define TRUE 1
+  50          #define FALSE 0
+  51          #define NULL 0
+*** WARNING C317 IN LINE 51 OF main.c: attempt to redefine macro 'NULL'
+  52          
+  53          //===================================================
+C51 COMPILER V9.60.7.0   MAIN                                                              10/21/2024 15:57:05 PAGE 2   
+
+  54          //            Uart1相关定义
+  55          //===================================================
+  56          #define Baudrate1 115200L
+  57          #define UART1_BUF_LENGTH 8
+  58          bit receiving_complete = 0;
+  59          u8 TX1_Cnt;                // 发送计数
+  60          u8 RX1_Cnt;                // 接收计数
+  61          bit B_TX1_Busy;              // 发送忙标志
+  62          u8 xdata RX1_Buffer[UART1_BUF_LENGTH]; // 接收缓冲
+  63          void UART1_config(u8 brt);         // 选择波特率, 2: 使用Timer2做波特率, 其它值: 使用Timer1做波特率.
+  64          void PrintString1(u8 *puts);
+  65          
+  66          //===========================================================
+  67          //                  WS2812定义
+  68          //==========================================================
+  69          #define RGB_PIN P54
+  70          #define RGB_NUMLEDS 2 // 个数
+  71          
+  72          //=====================================================
+  73          //                        颜色缓存
+  74          //=========================================================
+  75          xdata uint8 _rgb_buf_R[RGB_NUMLEDS] = {0};
+  76          xdata uint8 _rgb_buf_G[RGB_NUMLEDS] = {0};
+  77          xdata uint8 _rgb_buf_B[RGB_NUMLEDS] = {0};
+  78          
+  79          // IO_Init
+  80          void IO_Init();
+  81          
+  82          // 延迟函数@24.000MHz
+  83          void Delay1us(void);
+  84          void Delay50us(void);
+  85          void Delay1ms(void);
+  86          void Delay20ms(void);
+  87          void Delay200ms(void);
+  88          void Delay500ms(void);
+  89          void Delay_ms(uint16 time);
+  90          
+  91          // WS2812函数
+  92          void rgb_init();
+  93          void rgb_set_up();
+  94          void rgb_set_down();
+  95          void rgb_write(uint8 G8, uint8 R8, uint8 B8);
+  96          void rgb_rst();
+  97          void rgb_set_color(uint8 num, uint8 r, uint8 g, uint8 b);
+  98          void rgb_hal_delay(unsigned int t);
+  99          void rgb_show(uint8 num, uint8 r, uint8 g, uint8 b); // 默认直接调用该函数
+ 100          
+ 101          // 三色LED
+ 102          void Shutdown_LED();
+ 103          void Ctrl_LED(unsigned char *rxdata);
+ 104          
+ 105          // Uart
+ 106          void PrintString1(u8 *puts);
+ 107          void SetTimer2Baudraye(u16 dat);
+ 108          void UART1_config(u8 brt);
+ 109          
+ 110          enum UART_State
+ 111          {
+ 112            UART_IDLE,
+ 113            UART_RECEIVE,
+ 114            UART_SEND
+ 115          };
+C51 COMPILER V9.60.7.0   MAIN                                                              10/21/2024 15:57:05 PAGE 3   
+
+ 116          
+ 117          //=========================================================
+ 118          //            主函数
+ 119          //=========================================================
+ 120          void main()
+ 121          {
+ 122   1        // 定义接收数据缓冲区
+ 123   1        char RX_Data[UART1_BUF_LENGTH];       // 存储接收的数据
+ 124   1        unsigned char i;              // 循环计数器
+ 125   1        enum UART_State currentState = UART_IDLE; // 初始化当前状态为空闲状态
+ 126   1      
+ 127   1        // 初始化I/O口和RGB LED
+ 128   1        IO_Init();
+ 129   1        rgb_init();
+ 130   1      
+ 131   1        // 配置UART1波特率
+ 132   1        UART1_config(1); // 选择波特率, 2: 使用Timer2做波特率, 其它值: 使用Timer1做波特率.
+ 133   1        EA = 1;      // 允许全局中断
+ 134   1      
+ 135   1        // 发送初始化字符串到UART1
+ 136   1        PrintString1("STC8H8K64U UART1, Development by Leyue Chen\r\n"); // UART1发送一个字符串
+ 137   1      
+ 138   1        // RGB LED闪烁以指示初始化完成
+ 139   1        rgb_show(2, 0, 0, 128);
+ 140   1        Delay_ms(200);
+ 141   1        rgb_show(2, 0, 0, 0);
+ 142   1        Delay_ms(200);
+ 143   1      
+ 144   1        // 主循环
+ 145   1        while (1)
+ 146   1        {
+ 147   2          char RX_Data[UART1_BUF_LENGTH]; // ??????
+ 148   2          unsigned char i;
+ 149   2      
+ 150   2          if (receiving_complete) // ??????
+ 151   2          {
+ 152   3            for (i = 0; i < RX1_Cnt; i++)
+ 153   3            {
+ 154   4              RX_Data[i] = RX1_Buffer[i]; // ????
+ 155   4            }
+ 156   3            RX_Data[RX1_Cnt] = '\0'; // ????????
+ 157   3      
+ 158   3            Ctrl_LED(RX_Data);
+ 159   3      
+ 160   3            // ??????????
+ 161   3            RX1_Cnt = 0;
+ 162   3            receiving_complete = 0; // ????????
+ 163   3          }
+ 164   2      
+ 165   2          /*
+ 166   2          switch (currentState)
+ 167   2          {
+ 168   2          case UART_IDLE: // 空闲状态
+ 169   2            // 检查是否有数据接收，并且当前不忙于发送
+ 170   2            if ((TX1_Cnt != RX1_Cnt) && (!B_TX1_Busy))
+ 171   2            {
+ 172   2              // 切换到接收状态
+ 173   2              currentState = UART_RECEIVE;
+ 174   2            }
+ 175   2            else
+ 176   2            {
+ 177   2              // 放置其他代码
+C51 COMPILER V9.60.7.0   MAIN                                                              10/21/2024 15:57:05 PAGE 4   
+
+ 178   2            }
+ 179   2            break;
+ 180   2      
+ 181   2          case UART_RECEIVE: // 接收状态
+ 182   2            // 从接收缓冲区复制数据
+ 183   2            for (i = 0; i < UART1_BUF_LENGTH; i++)
+ 184   2            {
+ 185   2              RX_Data[i] = RX1_Buffer[i]; // 复制数据
+ 186   2            }
+ 187   2            RX_Data[UART1_BUF_LENGTH] = '\0'; // 确保字符串结束符
+ 188   2            Ctrl_LED(RX_Data);          // 控制LED状态
+ 189   2            currentState = UART_SEND;     // 切换到发送状态
+ 190   2            break;
+ 191   2      
+ 192   2          case UART_SEND: // 发送状态
+ 193   2            // 发送接收到的第一个字节
+ 194   2            SBUF = RX_Data[0];           // 发送第一个字节
+ 195   2            B_TX1_Busy = 1;            // 设置发送忙标志
+ 196   2            if (++TX1_Cnt >= UART1_BUF_LENGTH) // 更新发送计数器
+ 197   2            {
+ 198   2              TX1_Cnt = 0; // 循环计数器
+ 199   2            }
+ 200   2            currentState = UART_IDLE; // 返回到空闲状态
+ 201   2            break;
+ 202   2      
+ 203   2          default:            // 确保状态合法
+ 204   2            currentState = UART_IDLE; // 默认返回到空闲状态
+ 205   2            break;
+ 206   2          }
+ 207   2          */
+ 208   2        }
+ 209   1      }
+*** WARNING C280 IN LINE 123 OF main.c: 'RX_Data': unreferenced local variable
+*** WARNING C280 IN LINE 124 OF main.c: 'i': unreferenced local variable
+ 210          
+ 211          //==================================================
+ 212          //          void IO_Init();
+ 213          //==================================================
+ 214          void IO_Init()
+ 215          {
+ 216   1        P_SW2 |= 0x80; // 扩展寄存器(XFR)访问使能
+ 217   1        P0M1 = 0x00;
+ 218   1        P0M0 = 0x00;
+ 219   1        P1M1 = 0x00;
+ 220   1        P1M0 = 0x00;
+ 221   1        P2M1 = 0x00;
+ 222   1        P2M0 = 0x00;
+ 223   1        P3M1 = 0x00;
+ 224   1        P3M0 = 0x00;
+ 225   1        P4M1 = 0x00;
+ 226   1        P4M0 = 0x00;
+ 227   1        P5M1 = 0x00;
+ 228   1        P5M0 = 0x00;
+ 229   1        P6M1 = 0x00;
+ 230   1        P6M0 = 0x00;
+ 231   1        P7M1 = 0x00;
+ 232   1        P7M0 = 0x00;
+ 233   1      }
+ 234          
+ 235          //=====================================================
+ 236          //                    delay
+ 237          //===========================================
+C51 COMPILER V9.60.7.0   MAIN                                                              10/21/2024 15:57:05 PAGE 5   
+
+ 238          void Delay1us() //@24.000MHz
+ 239          {
+ 240   1        uint8 i;
+ 241   1      
+ 242   1        i = 6;
+ 243   1        while (--i)
+ 244   1          ;
+ 245   1      }
+ 246          
+ 247          void delay50us() //@22.1184MHz
+ 248          {
+ 249   1        unsigned int i;
+ 250   1      
+ 251   1        for (i = 0; i < 1106; i++)
+ 252   1        {
+ 253   2          _nop_();
+ 254   2        }
+ 255   1      }
+ 256          
+ 257          void Delay1ms(void) //@24.000MHz
+ 258          {
+ 259   1        unsigned char data i, j;
+ 260   1      
+ 261   1        _nop_();
+ 262   1        i = 32;
+ 263   1        j = 40;
+ 264   1        do
+ 265   1        {
+ 266   2          while (--j)
+ 267   2            ;
+ 268   2        } while (--i);
+ 269   1      }
+ 270          
+ 271          void Delay20ms(void) //@24.000MHz
+ 272          {
+ 273   1        unsigned char data i, j, k;
+ 274   1      
+ 275   1        _nop_();
+ 276   1        i = 3;
+ 277   1        j = 112;
+ 278   1        k = 91;
+ 279   1        do
+ 280   1        {
+ 281   2          do
+ 282   2          {
+ 283   3            while (--k)
+ 284   3              ;
+ 285   3          } while (--j);
+ 286   2        } while (--i);
+ 287   1      }
+ 288          
+ 289          void Delay_ms(uint16 time)
+ 290          {
+ 291   1        if (time < 1)
+ 292   1        {
+ 293   2          time = 1;
+ 294   2        }
+ 295   1        do
+ 296   1        {
+ 297   2          Delay1ms();
+ 298   2        } while (--time);
+ 299   1      }
+C51 COMPILER V9.60.7.0   MAIN                                                              10/21/2024 15:57:05 PAGE 6   
+
+ 300          
+ 301          //========================================================================
+ 302          // 描述: 全彩LED初始化，延迟5微秒.
+ 303          // 参数: none.
+ 304          // 返回: none.
+ 305          //========================================================================
+ 306          void rgb_init()
+ 307          {
+ 308   1        P5M0 = 0x00;
+ 309   1        P5M1 = 0x00;
+ 310   1        delay50us();
+ 311   1      }
+ 312          
+ 313          //========================================================================
+ 314          // 描述: 1码，高电平850ns 低电平400ns 误差正负150ns.
+ 315          // 在22.1184MHz下19个_nop_为858.99ns
+ 316          //========================================================================
+ 317          void rgb_set_up()
+ 318          {
+ 319   1        RGB_PIN = 1;
+ 320   1        _nop_();
+ 321   1        _nop_();
+ 322   1        _nop_();
+ 323   1        _nop_();
+ 324   1        _nop_();
+ 325   1        _nop_();
+ 326   1        _nop_();
+ 327   1        _nop_();
+ 328   1        _nop_();
+ 329   1        _nop_();
+ 330   1        _nop_();
+ 331   1        _nop_();
+ 332   1        _nop_();
+ 333   1        _nop_();
+ 334   1        _nop_();
+ 335   1        _nop_();
+ 336   1        _nop_();
+ 337   1        _nop_();
+ 338   1        _nop_();
+ 339   1        RGB_PIN = 0;
+ 340   1      }
+ 341          
+ 342          //========================================================================
+ 343          // 描述: 0码，高电平400ns 低电平850ns 误差正负150ns.
+ 344          // 在22.1184MHz下9个_nop_为406.89ns
+ 345          //========================================================================
+ 346          void rgb_set_down()
+ 347          {
+ 348   1        RGB_PIN = 1;
+ 349   1        _nop_();
+ 350   1        _nop_();
+ 351   1        _nop_();
+ 352   1        _nop_();
+ 353   1        _nop_();
+ 354   1        _nop_();
+ 355   1        _nop_();
+ 356   1        _nop_();
+ 357   1        _nop_();
+ 358   1        RGB_PIN = 0;
+ 359   1      }
+ 360          
+ 361          //========================================================================
+C51 COMPILER V9.60.7.0   MAIN                                                              10/21/2024 15:57:05 PAGE 7   
+
+ 362          // 描述: 发送24位数据.
+ 363          // 参数: 绿色8位，红色8位，蓝色8位.
+ 364          // 返回: none.
+ 365          //========================================================================
+ 366          void rgb_write(uint8 G8, uint8 R8, uint8 B8)
+ 367          {
+ 368   1        unsigned int n = 0;
+ 369   1        // 发送G8位
+ 370   1        EA = 0;
+ 371   1        for (n = 0; n < 8; n++)
+ 372   1        {
+ 373   2      
+ 374   2          if ((G8 & 0x80) == 0x80)
+ 375   2          {
+ 376   3            rgb_set_up();
+ 377   3          }
+ 378   2          else
+ 379   2          {
+ 380   3            rgb_set_down();
+ 381   3          }
+ 382   2          G8 <<= 1;
+ 383   2        }
+ 384   1        // 发送R8位
+ 385   1        for (n = 0; n < 8; n++)
+ 386   1        {
+ 387   2      
+ 388   2          if ((R8 & 0x80) == 0x80)
+ 389   2          {
+ 390   3            rgb_set_up();
+ 391   3          }
+ 392   2          else
+ 393   2          {
+ 394   3            rgb_set_down();
+ 395   3          }
+ 396   2          R8 <<= 1;
+ 397   2        }
+ 398   1        // 发送B8位
+ 399   1        for (n = 0; n < 8; n++)
+ 400   1        {
+ 401   2      
+ 402   2          if ((B8 & 0x80) == 0x80)
+ 403   2          {
+ 404   3            rgb_set_up();
+ 405   3          }
+ 406   2          else
+ 407   2          {
+ 408   3            rgb_set_down();
+ 409   3          }
+ 410   2          B8 <<= 1;
+ 411   2        }
+ 412   1        EA = 1;
+ 413   1      }
+ 414          
+ 415          //========================================================================
+ 416          // 描述: 复位.
+ 417          // 参数: none.
+ 418          // 返回: none.
+ 419          //========================================================================
+ 420          void rgb_rst()
+ 421          {
+ 422   1        RGB_PIN = 0;
+ 423   1        delay50us();
+C51 COMPILER V9.60.7.0   MAIN                                                              10/21/2024 15:57:05 PAGE 8   
+
+ 424   1      }
+ 425          
+ 426          // //========================================================================
+ 427          // // 描述: 把24位数据GRB码转RGB.
+ 428          // // 参数: none.
+ 429          // // 返回: none.
+ 430          // //========================================================================
+ 431          // void Set_Colour(uint8 r, uint8 g, uint8 b)
+ 432          // {
+ 433          //  uint8 i;
+ 434          //  for (i = 0; i < RGB_NUMLEDS; i++)
+ 435          //  {
+ 436          //    _rgb_buf_R[i] = r; //缓冲
+ 437          //    _rgb_buf_G[i] = g;
+ 438          //    _rgb_buf_B[i] = b;
+ 439          //  }
+ 440          //  for (i = 0; i < RGB_NUMLEDS; i++)
+ 441          //  {
+ 442          //    rgb_write(_rgb_buf_G[i], _rgb_buf_R[i], _rgb_buf_B[i]);//发送显示
+ 443          //  }
+ 444          // }
+ 445          
+ 446          //========================================================================
+ 447          // 描述: 设置指定点的显示颜色.
+ 448          // 参数: 第几个RGB灯，R值,G值,B值.
+ 449          // 返回: none.
+ 450          //========================================================================
+ 451          void rgb_set_color(uint8 num, uint8 r, uint8 g, uint8 b)
+ 452          {
+ 453   1        uint8 i;
+ 454   1        for (i = 0; i < RGB_NUMLEDS; i++)
+ 455   1        {
+ 456   2          _rgb_buf_R[num] = r; // 缓冲
+ 457   2          _rgb_buf_G[num] = g;
+ 458   2          _rgb_buf_B[num] = b;
+ 459   2        }
+ 460   1        for (i = 0; i < RGB_NUMLEDS; i++)
+ 461   1        {
+ 462   2          rgb_write(_rgb_buf_G[i], _rgb_buf_R[i], _rgb_buf_B[i]); // 发送显示
+ 463   2        }
+ 464   1      }
+ 465          
+ 466          // //========================================================================
+ 467          // // 描述: 颜色交换24位不拆分发.
+ 468          // // 参数: none.
+ 469          // // 返回: none.
+ 470          // //========================================================================
+ 471          // void SetPixelColor(uint8 num, uint32 c)
+ 472          // {
+ 473          //  uint8 i;
+ 474          //  for (i = 0; i < RGB_NUMLEDS; i++)
+ 475          //  {
+ 476          //    _rgb_buf_R[num] = (uint8)(c >> 16);
+ 477          //    _rgb_buf_G[num] = (uint8)(c >> 8);
+ 478          //    _rgb_buf_B[num] = (uint8)(c);
+ 479          //  }
+ 480          //  for (i = 0; i < RGB_NUMLEDS; i++)
+ 481          //  {
+ 482          //    rgb_write(_rgb_buf_G[i], _rgb_buf_R[i], _rgb_buf_B[i]);
+ 483          //  }
+ 484          // }
+ 485          
+C51 COMPILER V9.60.7.0   MAIN                                                              10/21/2024 15:57:05 PAGE 9   
+
+ 486          //========================================================================
+ 487          // 描述: 延迟t微秒，最大可达t = 1000us.
+ 488          // 参数: t - 延迟时间（微秒）.
+ 489          // 返回: none.
+ 490          //========================================================================
+ 491          void rgb_hal_delay(unsigned int t)
+ 492          {
+ 493   1        unsigned int i, j;
+ 494   1      
+ 495   1        // 根据1微秒需要的nop数量
+ 496   1        // 约22个nop来近似1微秒
+ 497   1        unsigned int nop_count = 22;
+ 498   1      
+ 499   1        for (i = 0; i < t; i++)
+ 500   1        {
+ 501   2          for (j = 0; j < nop_count; j++)
+ 502   2          {
+ 503   3            _nop_(); // 每次循环大约45.21纳秒
+ 504   3          }
+ 505   2        }
+ 506   1      }
+ 507          
+ 508          //========================================================================
+ 509          // 描述: 延迟5微秒.
+ 510          // 参数: none.
+ 511          // 返回: none.
+ 512          //========================================================================
+ 513          void rgb_show(uint8 num, uint8 r, uint8 g, uint8 b)
+ 514          {
+ 515   1        rgb_rst();
+ 516   1        rgb_hal_delay(30);
+ 517   1        rgb_set_color(num, r, g, b);
+ 518   1      }
+ 519          
+ 520          //=================================================
+ 521          //          三色LED
+ 522          //==================================================
+ 523          // 关闭三色LED
+ 524          void Shutdown_LED()
+ 525          {
+ 526   1        P00 = 1;
+ 527   1        P01 = 1;
+ 528   1        P02 = 1;
+ 529   1        rgb_show(1, 0, 0, 0);
+ 530   1        rgb_show(2, 0, 0, 0);
+ 531   1      }
+ 532          
+ 533          // 串口控制三色LED以及WS2812
+ 534          void Ctrl_LED(unsigned char *rxdata)
+ 535          {
+ 536   1      
+ 537   1        Shutdown_LED(); // 关闭全步LED
+ 538   1      
+ 539   1        // 三色LED
+ 540   1        // 可执行指令：LEDA、SHUT、LEDB、LEDR、LEDG
+ 541   1        if (strcmp(rxdata, "LEDA") == 0)
+ 542   1        {
+ 543   2          P00 = 0;
+ 544   2          P01 = 0;
+ 545   2          P02 = 0;
+ 546   2        }
+ 547   1        else if (strcmp(rxdata, "SHUT") == 0)
+C51 COMPILER V9.60.7.0   MAIN                                                              10/21/2024 15:57:05 PAGE 10  
+
+ 548   1        {
+ 549   2          Shutdown_LED();
+ 550   2        }
+ 551   1        else if (strcmp(rxdata, "LEDB") == 0)
+ 552   1        {
+ 553   2          P00 = 0;
+ 554   2          P01 = 1;
+ 555   2          P02 = 1;
+ 556   2        }
+ 557   1        else if (strcmp(rxdata, "LEDR") == 0)
+ 558   1        {
+ 559   2          P00 = 1;
+ 560   2          P01 = 0;
+ 561   2          P02 = 1;
+ 562   2        }
+ 563   1        else if (strcmp(rxdata, "LEDG") == 0)
+ 564   1        {
+ 565   2          P00 = 1;
+ 566   2          P01 = 1;
+ 567   2          P02 = 0;
+ 568   2        }
+ 569   1        /*
+ 570   1        else if (strcmp(rxdata, "RGBR") == 0)//执行不了
+ 571   1        {
+ 572   1          P00 = 0;
+ 573   1          Delay500ms();
+ 574   1          P00 = 1;
+ 575   1          P01 = 0;
+ 576   1          Delay500ms();
+ 577   1          P01 = 1;
+ 578   1          P02 = 0;
+ 579   1          Delay500ms();
+ 580   1          P02 = 1;
+ 581   1        }
+ 582   1        */
+ 583   1      
+ 584   1        // WS2812
+ 585   1        // 可执行指令：RALL、RAO1、RAO2、RAC1、RAC2、RGB1、RGB2、RGBR、RGBG、RGBB、RGBr、RGBg、RGBb
+ 586   1        else if (strcmp(rxdata, "RALL") == 0)
+ 587   1        {
+ 588   2          rgb_show(0, 255, 255, 255);
+ 589   2          rgb_show(1, 255, 255, 255);
+ 590   2        }
+ 591   1        else if (strcmp(rxdata, "RAO1") == 0)
+ 592   1        {
+ 593   2          rgb_show(0, 255, 255, 255);
+ 594   2        }
+ 595   1        else if (strcmp(rxdata, "RAO2") == 0)
+ 596   1        {
+ 597   2          rgb_show(1, 255, 255, 255);
+ 598   2        }
+ 599   1        else if (strcmp(rxdata, "RAC1") == 0)
+ 600   1        {
+ 601   2          rgb_show(0, 0, 0, 0);
+ 602   2        }
+ 603   1        else if (strcmp(rxdata, "RAC2") == 0)
+ 604   1        {
+ 605   2          rgb_show(1, 0, 0, 0);
+ 606   2        }
+ 607   1        else if (strcmp(rxdata, "RGB1") == 0)
+ 608   1        {
+ 609   2          rgb_show(0, 255, 255, 255);
+C51 COMPILER V9.60.7.0   MAIN                                                              10/21/2024 15:57:05 PAGE 11  
+
+ 610   2        }
+ 611   1        else if (strcmp(rxdata, "RGB2") == 0)
+ 612   1        {
+ 613   2          rgb_show(1, 255, 255, 255);
+ 614   2        }
+ 615   1        else if (strcmp(rxdata, "RGBR") == 0)
+ 616   1        {
+ 617   2          rgb_show(0, 255, 0, 0);
+ 618   2        }
+ 619   1        else if (strcmp(rxdata, "RGBG") == 0)
+ 620   1        {
+ 621   2          rgb_show(0, 0, 255, 0);
+ 622   2        }
+ 623   1        else if (strcmp(rxdata, "RGBB") == 0)
+ 624   1        {
+ 625   2          rgb_show(0, 0, 0, 255);
+ 626   2        }
+ 627   1        else if (strcmp(rxdata, "RGBr") == 0)
+ 628   1        {
+ 629   2          rgb_show(1, 255, 0, 0);
+ 630   2        }
+ 631   1        else if (strcmp(rxdata, "RGBg") == 0)
+ 632   1        {
+ 633   2          rgb_show(1, 0, 255, 0);
+ 634   2        }
+ 635   1        else if (strcmp(rxdata, "RGBb") == 0)
+ 636   1        {
+ 637   2          rgb_show(1, 0, 0, 255);
+ 638   2        }
+ 639   1      }
+ 640          
+ 641          //========================================================================
+ 642          // 函数: void PrintString1(u8 *puts)
+ 643          // 描述: 串口1发送字符串函数。
+ 644          // 参数: puts:  字符串指针.
+ 645          // 返回: none.
+ 646          // 版本: VER1.0
+ 647          // 日期: 2014-11-28
+ 648          // 备注:
+ 649          //========================================================================
+ 650          void PrintString1(u8 *puts) // 发送一个字符串
+ 651          {
+ 652   1        for (; *puts != 0; puts++) // 遇到停止符0结束
+ 653   1        {
+ 654   2          SBUF = *puts;
+ 655   2          B_TX1_Busy = 1;
+ 656   2          while (B_TX1_Busy)
+ 657   2            ;
+ 658   2        }
+ 659   1      }
+ 660          
+ 661          //========================================================================
+ 662          // 函数: SetTimer2Baudraye(u16 dat)
+ 663          // 描述: 设置Timer2做波特率发生器。
+ 664          // 参数: dat: Timer2的重装值.
+ 665          // 返回: none.
+ 666          // 版本: VER1.0
+ 667          // 日期: 2014-11-28
+ 668          // 备注:
+ 669          //========================================================================
+ 670          void SetTimer2Baudraye(u16 dat) // 选择波特率, 2: 使用Timer2做波特率, 其它值: 使用Timer1做波特率.
+ 671          {
+C51 COMPILER V9.60.7.0   MAIN                                                              10/21/2024 15:57:05 PAGE 12  
+
+ 672   1        AUXR &= ~(1 << 4); // Timer stop
+ 673   1        AUXR &= ~(1 << 3); // Timer2 set As Timer
+ 674   1        AUXR |= (1 << 2);  // Timer2 set as 1T mode
+ 675   1        T2H = dat / 256;
+ 676   1        T2L = dat % 256;
+ 677   1        IE2 &= ~(1 << 2); // 禁止中断
+ 678   1        AUXR |= (1 << 4); // Timer run enable
+ 679   1      }
+ 680          
+ 681          //========================================================================
+ 682          // 函数: void UART1_config(u8 brt)
+ 683          // 描述: UART1初始化函数。
+ 684          // 参数: brt: 选择波特率, 2: 使用Timer2做波特率, 其它值: 使用Timer1做波特率.
+ 685          // 返回: none.
+ 686          // 版本: VER1.0
+ 687          // 日期: 2014-11-28
+ 688          // 备注:
+ 689          //========================================================================
+ 690          void UART1_config(u8 brt) // 选择波特率, 2: 使用Timer2做波特率, 其它值: 使用Timer1做波特率.
+ 691          {
+ 692   1        /*********** 波特率使用定时器2 *****************/
+ 693   1        if (brt == 2)
+ 694   1        {
+ 695   2          AUXR |= 0x01; // S1 BRT Use Timer2;
+ 696   2          SetTimer2Baudraye(65536UL - (MAIN_Fosc / 4) / Baudrate1);
+ 697   2        }
+ 698   1      
+ 699   1        /*********** 波特率使用定时器1 *****************/
+ 700   1        else
+ 701   1        {
+ 702   2          TR1 = 0;
+ 703   2          AUXR &= ~0x01;     // S1 BRT Use Timer1;
+ 704   2          AUXR |= (1 << 6);  // Timer1 set as 1T mode
+ 705   2          TMOD &= ~(1 << 6); // Timer1 set As Timer
+ 706   2          TMOD &= ~0x30;     // Timer1_16bitAutoReload;
+ 707   2          TH1 = (u8)((65536UL - (MAIN_Fosc / 4) / Baudrate1) / 256);
+ 708   2          TL1 = (u8)((65536UL - (MAIN_Fosc / 4) / Baudrate1) % 256);
+ 709   2          ET1 = 0;      // 禁止中断
+ 710   2          INTCLKO &= ~0x02; // 不输出时钟
+ 711   2          TR1 = 1;
+ 712   2        }
+ 713   1        /*************************************************/
+ 714   1      
+ 715   1        SCON = (SCON & 0x3f) | 0x40; // UART1模式, 0x00: 同步移位输出, 0x40: 8位数据,可变波特率, 0x80: 9位数据,固
+             -定波特率, 0xc0: 9位数据,可变波特率
+ 716   1        //  PS  = 1;    //高优先级中断
+ 717   1        ES = 1;  // 允许中断
+ 718   1        REN = 1; // 允许接收
+ 719   1        P_SW1 &= 0x3f;
+ 720   1        P_SW1 |= 0x00; // UART1 switch to, 0x00: P3.0 P3.1, 0x40: P3.6 P3.7, 0x80: P1.6 P1.7, 0xC0: P4.3 P4.4
+ 721   1        //  PCON2 |=  (1<<4);   //内部短路RXD与TXD, 做中继, ENABLE,DISABLE
+ 722   1      
+ 723   1        B_TX1_Busy = 0;
+ 724   1        TX1_Cnt = 0;
+ 725   1        RX1_Cnt = 0;
+ 726   1      }
+ 727          
+ 728          //========================================================================
+ 729          // 函数: void UART1_int (void) interrupt UART1_VECTOR
+ 730          // 描述: UART1中断函数。
+ 731          // 参数: nine.
+ 732          // 返回: none.
+C51 COMPILER V9.60.7.0   MAIN                                                              10/21/2024 15:57:05 PAGE 13  
+
+ 733          // 版本: VER1.0
+ 734          // 日期: 2014-11-28
+ 735          // 备注:
+ 736          //========================================================================
+ 737          void UART1_int(void) interrupt 4
+ 738          {
+ 739   1        if (RI)
+ 740   1        {
+ 741   2          RI = 0;
+ 742   2          RX1_Buffer[RX1_Cnt] = SBUF;
+ 743   2          if (RX1_Buffer[RX1_Cnt] == '#')
+ 744   2          {
+ 745   3            receiving_complete = 1; // ????????
+ 746   3          }
+ 747   2          else
+ 748   2          {
+ 749   3            if (++RX1_Cnt >= UART1_BUF_LENGTH)
+ 750   3              RX1_Cnt = 0; // ????
+ 751   3          }
+ 752   2        }
+ 753   1      
+ 754   1        if (TI)
+ 755   1        {
+ 756   2          TI = 0;
+ 757   2          B_TX1_Busy = 0;
+ 758   2        }
+ 759   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1202    ----
+   CONSTANT SIZE    =    136    ----
+   XDATA SIZE       =     14    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      2      30
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      2    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  3 WARNING(S),  0 ERROR(S)

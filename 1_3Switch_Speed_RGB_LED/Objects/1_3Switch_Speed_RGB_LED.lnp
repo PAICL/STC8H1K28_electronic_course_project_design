@@ -1,0 +1,3 @@
+".\Objects\main.obj" 
+TO ".\Objects\1_3Switch_Speed_RGB_LED" 
+PRINT(".\Listings\1_3Switch_Speed_RGB_LED.m51") RAMSIZE(256) 
