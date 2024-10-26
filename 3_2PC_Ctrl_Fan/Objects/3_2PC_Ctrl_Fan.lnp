@@ -1,0 +1,3 @@
+".\Objects\main.obj" 
+TO ".\Objects\3_2PC_Ctrl_Fan" 
+PRINT(".\Listings\3_2PC_Ctrl_Fan.m51") RAMSIZE(256) 

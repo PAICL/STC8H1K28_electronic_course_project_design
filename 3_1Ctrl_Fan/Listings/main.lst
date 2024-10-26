@@ -1,0 +1,322 @@
+C51 COMPILER V9.60.7.0   MAIN                                                              10/20/2024 16:13:41 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\main
+                    -.lst) TABS(2) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          /*---------------------------------------------------------------------*/
+   2          /* --- STC MCU Limited ------------------------------------------------*/
+   3          /* --- STC 1T Series MCU Demo Programme -------------------------------*/
+   4          /* --- Mobile: (86)13922805190 ----------------------------------------*/
+   5          /* --- Fax: 86-0513-55012956,55012947,55012969 ------------------------*/
+   6          /* --- Tel: 86-0513-55012928,55012929,55012966 ------------------------*/
+   7          /* --- Web: www.STCAI.com ---------------------------------------------*/
+   8          /* --- Web: www.STCMCUDATA.com  ---------------------------------------*/
+   9          /* --- BBS: www.STCAIMCU.com  -----------------------------------------*/
+  10          /* --- QQ:  800003751 -------------------------------------------------*/
+  11          /* Èç¹ûÒªÔÚ³ÌÐòÖÐÊ¹ÓÃ´Ë´úÂë,ÇëÔÚ³ÌÐòÖÐ×¢Ã÷Ê¹ÓÃÁËSTCµÄ×ÊÁÏ¼°³ÌÐò        */
+  12          /*---------------------------------------------------------------------*/
+  13          
+  14          /*************  ¹¦ÄÜËµÃ÷    **************
+  15          
+  16          ±¾Àý³Ì»ùÓÚSTC8H8K64UÎªÖ÷¿ØÐ¾Æ¬µÄÊµÑéÏä9½øÐÐ±àÐ´²âÊÔ£¬STC8HÏµÁÐÐ¾Æ¬¿ÉÍ¨ÓÃ²Î¿¼¡£
+  17          
+  18          ¸ß¼¶PWM¶¨Ê±Æ÷ PWM1P/PWM1N,PWM2P/PWM2N,PWM3P/PWM3N,PWM4P/PWM4N Ã¿¸öÍ¨µÀ¶¼¿É¶ÀÁ¢ÊµÏÖPWMÊä³ö£¬»òÕßÁ½Á½»¥²¹¶Ô³
+             -ÆÊä³ö¡£
+  19          
+  20          8¸öÍ¨µÀPWMÉèÖÃ¶ÔÓ¦P6µÄ8¸ö¶Ë¿Ú¡£
+  21          
+  22          Í¨¹ýP6¿ÚÉÏÁ¬½ÓµÄ8¸öLEDµÆ£¬ÀûÓÃPWMÊµÏÖºôÎüµÆÐ§¹û¡£
+  23          
+  24          PWMÖÜÆÚºÍÕ¼¿Õ±È¿ÉÒÔ¸ù¾ÝÐèÒª×ÔÐÐÉèÖÃ£¬×î¸ß¿É´ï65535¡£
+  25          
+  26          ÏÂÔØÊ±, Ñ¡ÔñÊ±ÖÓ 24MHZ (ÓÃ»§¿É×ÔÐÐÐÞ¸ÄÆµÂÊ)¡£
+  27          
+  28          ******************************************/
+  29          
+  30          #include "stc8h.h" // °üº¬STC8ÏµÁÐÎ¢¿ØÖÆÆ÷µÄ¼Ä´æÆ÷¶¨Òå
+  31          #include "intrins.h"
+  32          
+  33          #define MAIN_Fosc 22118400L // ¶¨ÒåÖ÷Ê±ÖÓÆµÂÊ
+  34          
+  35          typedef unsigned char u8; // ¶¨ÒåÊý¾ÝÀàÐÍ
+  36          typedef unsigned int u16;
+  37          typedef unsigned long u32;
+  38          
+  39          /****************************** ÓÃ»§¶¨Òåºê ***********************************/
+  40          
+  41          #define Timer0_Reload (65536UL - (MAIN_Fosc / 1000)) // ¶¨Ê±Æ÷0ÖÐ¶ÏÆµÂÊ, 1000´Î/Ãë
+  42          
+  43          /*****************************************************************************/
+  44          
+  45          // key
+  46          sbit key1 = P3 ^ 2;
+  47          volatile unsigned char ledstate = 1;
+  48          
+  49          void Delay500ms()
+  50          {
+  51   1          unsigned char i, j, k;
+  52   1          _nop_();
+  53   1          _nop_();
+C51 COMPILER V9.60.7.0   MAIN                                                              10/20/2024 16:13:41 PAGE 2   
+
+  54   1          i = 43;
+  55   1          j = 6;
+  56   1          k = 50;
+  57   1          do
+  58   1          {
+  59   2              do
+  60   2              {
+  61   3                  while (--k)
+  62   3                      ;
+  63   3              } while (--j);
+  64   2          } while (--i);
+  65   1      }
+  66          
+  67          void Delay10ms()
+  68          {
+  69   1          unsigned char i, j;
+  70   1          _nop_();
+  71   1          _nop_();
+  72   1          i = 27;
+  73   1          j = 104;
+  74   1          do
+  75   1          {
+  76   2              while (--j)
+  77   2                  ;
+  78   2          } while (--i);
+  79   1      }
+  80          
+  81          void LED_1()
+  82          {
+  83   1          P02 = 1;
+  84   1          // Delay500ms();
+  85   1          P00 = 0;
+  86   1      }
+  87          void LED_2()
+  88          {
+  89   1          P00 = 1;
+  90   1          // Delay500ms();
+  91   1          P01 = 0;
+  92   1      }
+  93          
+  94          void LED_3()
+  95          {
+  96   1          P01 = 1;
+  97   1          // Delay500ms();
+  98   1          P02 = 0;
+  99   1      }
+ 100          
+ 101          #define PWM1_1 0x00
+ 102          #define PWM1_2 0x01
+ 103          #define PWM1_3 0x02
+ 104          
+ 105          #define PWM2_1 0x00
+ 106          #define PWM2_2 0x04
+ 107          #define PWM2_3 0x08
+ 108          
+ 109          #define PWM3_1 0x00
+ 110          #define PWM3_2 0x10
+ 111          #define PWM3_3 0x20
+ 112          
+ 113          #define PWM4_1 0x00
+ 114          #define PWM4_2 0x40
+ 115          #define PWM4_3 0x80
+C51 COMPILER V9.60.7.0   MAIN                                                              10/20/2024 16:13:41 PAGE 3   
+
+ 116          #define PWM4_4 0xC0
+ 117          
+ 118          #define ENO1P 0x01
+ 119          #define ENO1N 0x02
+ 120          #define ENO2P 0x04
+ 121          #define ENO2N 0x08
+ 122          #define ENO3P 0x10
+ 123          #define ENO3N 0x20
+ 124          #define ENO4P 0x40
+ 125          #define ENO4N 0x80
+ 126          
+ 127          #define PWM_PERIOD 1023 // ÉèÖÃPWMÖÜÆÚÖµ
+ 128          
+ 129          /*************  ±¾µØ±äÁ¿ÉùÃ÷    **************/
+ 130          bit B_1ms; // 1ms±êÖ¾
+ 131          
+ 132          u16 PWM1_Duty; // PWM1Õ¼¿Õ±È
+ 133          u16 PWM2_Duty; // PWM2Õ¼¿Õ±È
+ 134          u16 PWM3_Duty; // PWM3Õ¼¿Õ±È
+ 135          u16 PWM4_Duty; // PWM4Õ¼¿Õ±È
+ 136          
+ 137          bit PWM1_Flag; // PWM1±êÖ¾Î»
+ 138          bit PWM2_Flag; // PWM2±êÖ¾Î»
+ 139          bit PWM3_Flag; // PWM3±êÖ¾Î»
+ 140          bit PWM4_Flag; // PWM4±êÖ¾Î»
+ 141          
+ 142          void UpdatePwm(void); // ¸üÐÂPWMÕ¼¿Õ±ÈµÄº¯ÊýÉùÃ÷
+ 143          
+ 144          /******************** Ö÷º¯Êý **************************/
+ 145          void main(void)
+ 146          {
+ 147   1          P_SW2 |= 0x80; // ÆôÓÃÀ©Õ¹¼Ä´æÆ÷(XFR)·ÃÎÊ
+ 148   1      
+ 149   1          // ÉèÖÃP0¡¢P1¡¢P2¡¢P3¡¢P4¡¢P5ºÍP6Òý½ÅÎªÂ©¼«¿ªÂ·
+ 150   1          P0M1 = 0x30;
+ 151   1          P0M0 = 0x30;
+ 152   1          P1M1 = 0x30;
+ 153   1          P1M0 = 0x30;
+ 154   1          P2M1 = 0x3c;
+ 155   1          P2M0 = 0x3c;
+ 156   1          P3M1 = 0x00;
+ 157   1          P3M0 = 0x00;
+ 158   1          P4M1 = 0x3c;
+ 159   1          P4M0 = 0x3c;
+ 160   1          P5M1 = 0x0c;
+ 161   1          P5M0 = 0x0c;
+ 162   1          P6M1 = 0xff;
+ 163   1          P6M0 = 0xff;
+ 164   1          P7M1 = 0x00;
+ 165   1          P7M0 = 0x00;
+ 166   1      
+ 167   1          // ³õÊ¼»¯PWM±êÖ¾ºÍÕ¼¿Õ±È
+ 168   1          PWM1_Flag = 0;
+ 169   1          PWM2_Flag = 0;
+ 170   1          PWM3_Flag = 0;
+ 171   1          PWM4_Flag = 0;
+ 172   1      
+ 173   1          PWM1_Duty = 0;    // ³õÊ¼Õ¼¿Õ±ÈÎª0
+ 174   1          PWM2_Duty = 256;  // ³õÊ¼Õ¼¿Õ±È
+ 175   1          PWM3_Duty = 512;  // ³õÊ¼Õ¼¿Õ±È
+ 176   1          PWM4_Duty = 1024; // ³õÊ¼Õ¼¿Õ±È
+ 177   1      
+C51 COMPILER V9.60.7.0   MAIN                                                              10/20/2024 16:13:41 PAGE 4   
+
+ 178   1          // Timer0³õÊ¼»¯
+ 179   1          AUXR = 0x80;                     // Timer0ÉèÖÃÎª1T£¬16Î»×Ô¶¯ÖØÔØ¶¨Ê±Æ÷
+ 180   1          TH0 = (u8)(Timer0_Reload / 256); // ÉèÖÃ¶¨Ê±Æ÷¸ß×Ö½Ú
+ 181   1          TL0 = (u8)(Timer0_Reload % 256); // ÉèÖÃ¶¨Ê±Æ÷µÍ×Ö½Ú
+ 182   1          ET0 = 1;                         // ÆôÓÃTimer0ÖÐ¶Ï
+ 183   1          TR0 = 1;                         // Æô¶¯Timer0
+ 184   1      
+ 185   1          IT0 = 1;
+ 186   1          EX0 = 1;
+ 187   1          EA = 1;
+ 188   1      
+ 189   1          // ÅäÖÃPWMÍ¨µÀ
+ 190   1          PWMA_CCER1 = 0x00; // Çå³ýCCxEÒÔ¹Ø±ÕÍ¨µÀ
+ 191   1          PWMA_CCER2 = 0x00;
+ 192   1          PWMA_CCMR1 = 0x68; // Í¨µÀÄ£Ê½ÅäÖÃ
+ 193   1          PWMA_CCMR2 = 0x68;
+ 194   1          PWMA_CCMR3 = 0x68;
+ 195   1          PWMA_CCMR4 = 0x68;
+ 196   1          PWMA_CCER1 = 0x55; // Ê¹ÄÜÍ¨µÀÊä³öºÍ¼«ÐÔ
+ 197   1          PWMA_CCER2 = 0x55;
+ 198   1      
+ 199   1          PWMA_ARRH = (u8)(PWM_PERIOD >> 8); // ÉèÖÃPWMÖÜÆÚµÄ¸ß×Ö½Ú
+ 200   1          PWMA_ARRL = (u8)PWM_PERIOD;        // ÉèÖÃPWMÖÜÆÚµÄµÍ×Ö½Ú
+ 201   1      
+ 202   1          // Ê¹ÄÜPWMÊä³ö
+ 203   1          PWMA_ENO = 0x00;
+ 204   1          PWMA_ENO |= ENO1P;
+ 205   1          PWMA_ENO |= ENO1N;
+ 206   1          PWMA_ENO |= ENO2P;
+ 207   1          PWMA_ENO |= ENO2N;
+ 208   1          PWMA_ENO |= ENO3P;
+ 209   1          PWMA_ENO |= ENO3N;
+ 210   1          PWMA_ENO |= ENO4P;
+ 211   1          PWMA_ENO |= ENO4N;
+ 212   1      
+ 213   1          PWMA_PS = 0x00; // Çå¿ÕPWMÒý½ÅÑ¡ÔñÎ»
+ 214   1          PWMA_PS |= P10; // ÉèÖÃP10ÎªPWMÊä³öÒý½Å
+ 215   1      
+ 216   1          PWMA_BKR = 0x80;  // Ê¹ÄÜÖ÷Êä³ö
+ 217   1          PWMA_CR1 |= 0x01; // Æô¶¯¼ÆÊ±
+ 218   1      
+ 219   1          P40 = 0; // ¸øLED¹©µç
+ 220   1          EA = 1;  // ÆôÓÃÈ«¾ÖÖÐ¶Ï
+ 221   1      
+ 222   1          while (1)
+ 223   1          {
+ 224   2          }
+ 225   1      }
+ 226          
+ 227          /********************** Timer0 1msÖÐ¶Ïº¯Êý ************************/
+ 228          void timer0(void) interrupt 1
+ 229          {
+ 230   1          if (ledstate == 1)
+ 231   1          {
+ 232   2              PWM1_Duty = 0;
+ 233   2          }
+ 234   1          if (ledstate == 2)
+ 235   1          {
+ 236   2              PWM1_Duty = 341;
+ 237   2          }
+ 238   1          if (ledstate == 3)
+ 239   1          {
+C51 COMPILER V9.60.7.0   MAIN                                                              10/20/2024 16:13:41 PAGE 5   
+
+ 240   2              PWM1_Duty = 683;
+ 241   2          }
+ 242   1          if (ledstate == 4)
+ 243   1          {
+ 244   2              PWM1_Duty = 1023;
+ 245   2          }
+ 246   1      
+ 247   1          /*
+ 248   1              if (!PWM1_Flag)
+ 249   1          {
+ 250   1              PWM1_Duty++;
+ 251   1              if (PWM1_Duty > PWM_PERIOD)
+ 252   1                  PWM1_Flag = 1;
+ 253   1          }
+ 254   1          else
+ 255   1          {
+ 256   1              PWM1_Duty--;
+ 257   1              if (PWM1_Duty <= 0)
+ 258   1                  PWM1_Flag = 0;
+ 259   1          }
+ 260   1          */
+ 261   1      
+ 262   1          UpdatePwm(); // µ÷ÓÃº¯Êý¸üÐÂPWMÊä³ö
+ 263   1      }
+ 264          
+ 265          /************************** ¸üÐÂPWMÕ¼¿Õ±Èº¯Êý **************************/
+ 266          void UpdatePwm(void)
+ 267          {
+ 268   1          // ÉèÖÃPWMµÄÕ¼¿Õ±È
+ 269   1          PWMA_CCR1H = (u8)(PWM1_Duty >> 8); // ÉèÖÃPWM1µÄ¸ß×Ö½Ú
+ 270   1          PWMA_CCR1L = (u8)PWM1_Duty;        // ÉèÖÃPWM1µÄµÍ×Ö½Ú
+ 271   1      }
+ 272          
+ 273          /****************** °´¼üÖÐ¶Ï ************************************/
+ 274          void Int0_isr() interrupt 0
+ 275          {
+ 276   1          if (key1 == 0)
+ 277   1          {
+ 278   2              Delay10ms();
+ 279   2          Delay10ms();
+ 280   2              if (key1 == 0)
+ 281   2              {
+ 282   3                  ledstate++;
+ 283   3                  if (ledstate > 4)
+ 284   3                  {
+ 285   4                      ledstate = 1;
+ 286   4                  }
+ 287   3              }
+ 288   2          }
+ 289   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    396    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      9    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      5    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

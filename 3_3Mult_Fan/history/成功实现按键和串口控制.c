@@ -1,8 +1,11 @@
 //===============================================================
-//本项目基于STC8H1K28开发板以及STC官方Damo程序开发
-//程序功能主要通过串口输出"FAN0#"到"FAN9#"来控制P10端口上的PWM控制占空比(1kHz)?
-//频率为22.1184MHz，波特率为115200
-//DATA:2024/10/23
+// 本项目基于STC8H1K28开发板以及STC官方Damo程序开发
+// 本程序功能有三种控制，分别为按键控制，串口控制以及温度控制风扇转速
+// 按键控制主要通过按键切换风扇转速
+// 串口控制主要通过串口输出"FAN0#"到"FAN9#"来控制P10端口上的PWM控制占空比(1kHz)?
+// 温度控制主要通过检测当前温度是否达到判定某一个值来决定风扇转速的值
+// 频率为22.1184MHz，波特率为115200
+// DATA:2024/10/23
 //===============================================================
 #include "stc8h.h"
 #include "intrins.h"
@@ -39,6 +42,8 @@ static void Delay_us(uint16 us);
 static void Delay_ms(uint16 ms);
 void Delay20ms();
 void Delay500ms();
+void Delaykey1();
+void Delaykey2();
 
 void Shutdown_LED();
 void Ctrl_LED(unsigned char *rxdata);
@@ -58,7 +63,11 @@ enum UART_State
 
 // key
 sbit key1 = P3 ^ 2;
-volatile unsigned char keystate = 1;
+sbit key2 = P3 ^ 3;
+volatile unsigned char Key_Switch = 0; // P32控制风扇工作模式，默认为按键控制[Key_Switch = 0]/串口控制[Key_Switch = 1]/温度控制[Key_Switch = 2]
+volatile unsigned char Key_State = 0;
+volatile unsigned char Uart_State = 0;
+volatile unsigned char Temp_State = 0;
 volatile unsigned char Fan_State = 0;
 #define PWM1_1 0x00
 #define PWM1_2 0x01
@@ -110,6 +119,8 @@ void main()
 
     IT0 = 1;
     EX0 = 1;
+    IT1 = 1;
+    EX1 = 1;
     EA = 1;
 
     PWMA_CCER1 = 0x00;
@@ -138,24 +149,45 @@ void main()
     UART1_config(1);
 
     Delay_ms(1);
+    Delay20ms();
+
+    EA = 1;
 
     while (1)
     {
-        char RX_Data[UART1_BUF_LENGTH];
-        unsigned char i;
-
-        if (receiving_complete)
+        if (Key_Switch == 0)
         {
-            for (i = 0; i < RX1_Cnt; i++)
+            if (key2 == 0)
             {
-                RX_Data[i] = RX1_Buffer[i];
+                Delaykey2();
+                if (key2 == 0)
+                {
+                    Key_State++;
+                    if (Key_State > 4)
+                    {
+                        Key_State = 0;
+                    }
+                }
             }
-            RX_Data[RX1_Cnt] = '\0';
+        }
+        else if (Key_Switch == 1)
+        {
+            char RX_Data[UART1_BUF_LENGTH];
+            unsigned char i;
 
-            Ctrl_LED(RX_Data);
+            if (receiving_complete)
+            {
+                for (i = 0; i < RX1_Cnt; i++)
+                {
+                    RX_Data[i] = RX1_Buffer[i];
+                }
+                RX_Data[RX1_Cnt] = '\0';
 
-            RX1_Cnt = 0;
-            receiving_complete = 0;
+                Ctrl_LED(RX_Data);
+
+                RX1_Cnt = 0;
+                receiving_complete = 0;
+            }
         }
     }
 }
@@ -236,6 +268,32 @@ void Delay20ms()
     }
 }
 
+void Delaykey1()
+{
+    u8 ms = 50;
+    while (ms--)
+    {
+        unsigned char i;
+        for (i = 0; i < 18; i++)
+        {
+            Delay_us(56);
+        }
+    }
+}
+
+void Delaykey2()
+{
+    u8 ms = 60;
+    while (ms--)
+    {
+        unsigned char i;
+        for (i = 0; i < 18; i++)
+        {
+            Delay_us(56);
+        }
+    }
+}
+
 void Shutdown_LED()
 {
     P00 = 1;
@@ -279,43 +337,43 @@ void Ctrl_LED(unsigned char *rxdata)
     //=============================
     if (strcmp(rxdata, "FAN0") == 0)
     {
-        Fan_State = 0;
+        Uart_State = 0;
     }
     else if (strcmp(rxdata, "FAN1") == 0)
     {
-        Fan_State = 1;
+        Uart_State = 1;
     }
     else if (strcmp(rxdata, "FAN2") == 0)
     {
-        Fan_State = 2;
+        Uart_State = 2;
     }
     else if (strcmp(rxdata, "FAN3") == 0)
     {
-        Fan_State = 3;
+        Uart_State = 3;
     }
     else if (strcmp(rxdata, "FAN4") == 0)
     {
-        Fan_State = 4;
+        Uart_State = 4;
     }
     else if (strcmp(rxdata, "FAN5") == 0)
     {
-        Fan_State = 5;
+        Uart_State = 5;
     }
     else if (strcmp(rxdata, "FAN6") == 0)
     {
-        Fan_State = 6;
+        Uart_State = 6;
     }
     else if (strcmp(rxdata, "FAN7") == 0)
     {
-        Fan_State = 7;
+        Uart_State = 7;
     }
     else if (strcmp(rxdata, "FAN8") == 0)
     {
-        Fan_State = 8;
+        Uart_State = 8;
     }
     else if (strcmp(rxdata, "FAN9") == 0)
     {
-        Fan_State = 9;
+        Uart_State = 9;
     }
 }
 
@@ -400,49 +458,87 @@ void UART1_int(void) interrupt 4
     }
 }
 
-void timer0(void) interrupt 3
+void timer0(void) interrupt 3 using 2
 {
-    if (Fan_State == 0)
+    if (Key_Switch == 0)
     {
-        PWM1_Duty = 0; // Fan_State 0
-    }
-    else if (Fan_State == 1)
-    {
-        PWM1_Duty = 113; // Fan_State 1
-    }
-    else if (Fan_State == 2)
-    {
-        PWM1_Duty = 227; // Fan_State 2
-    }
-    else if (Fan_State == 3)
-    {
-        PWM1_Duty = 341; // Fan_State 3
-    }
-    else if (Fan_State == 4)
-    {
-        PWM1_Duty = 454; // Fan_State 4
-    }
-    else if (Fan_State == 5)
-    {
-        PWM1_Duty = 568; // Fan_State 5
-    }
-    else if (Fan_State == 6)
-    {
-        PWM1_Duty = 682; // Fan_State 6
-    }
-    else if (Fan_State == 7)
-    {
-        PWM1_Duty = 795; // Fan_State 7
-    }
-    else if (Fan_State == 8)
-    {
-        PWM1_Duty = 909; // Fan_State 8
-    }
-    else if (Fan_State == 9)
-    {
-        PWM1_Duty = 1023; // Fan_State 9
+        P00 = 0;
+        P01 = P02 = 1;
+        Uart_State = 0;
+        Temp_State = 0;
+        if (Key_State == 0)
+        {
+            PWM1_Duty = 0;
+        }
+        if (Key_State == 1)
+        {
+            PWM1_Duty = 341;
+        }
+        if (Key_State == 2)
+        {
+            PWM1_Duty = 682;
+        }
+        if (Key_State == 3)
+        {
+            PWM1_Duty = 1023;
+        }
     }
 
+    if (Key_Switch == 1)
+    {
+        P01 = 0;
+        P00 = P02 = 1;
+        Key_State = 0;
+        Temp_State = 0;
+        if (Uart_State == 0)
+        {
+            PWM1_Duty = 0;
+        }
+        else if (Uart_State == 1)
+        {
+            PWM1_Duty = 113;
+        }
+        else if (Uart_State == 2)
+        {
+            PWM1_Duty = 227;
+        }
+        else if (Uart_State == 3)
+        {
+            PWM1_Duty = 341;
+        }
+        else if (Uart_State == 4)
+        {
+            PWM1_Duty = 454;
+        }
+        else if (Uart_State == 5)
+        {
+            PWM1_Duty = 568;
+        }
+        else if (Uart_State == 6)
+        {
+            PWM1_Duty = 682;
+        }
+        else if (Uart_State == 7)
+        {
+            PWM1_Duty = 795;
+        }
+        else if (Uart_State == 8)
+        {
+            PWM1_Duty = 909;
+        }
+        else if (Uart_State == 9)
+        {
+            PWM1_Duty = 1023;
+        }
+    }
+    if (Key_Switch == 2)
+    {
+        P02 = 0;
+        P00 = P01 = 1;
+        Key_State = 0;
+        Uart_State = 0;
+        PWM1_Duty = 1023;
+    }
     UpdatePwm();
 }
 
@@ -452,18 +548,35 @@ void UpdatePwm(void)
     PWMA_CCR1L = (u8)PWM1_Duty;
 }
 
-void Int0_isr() interrupt 0
+void Int0_isr() interrupt 0 using 0
 {
     if (key1 == 0)
     {
-        Delay20ms();
+        Delaykey1();
         if (key1 == 0)
         {
-            keystate++;
-            if (keystate > 4)
+            Key_Switch++;
+            if (Key_Switch > 2)
             {
-                keystate = 1;
+                Key_Switch = 0;
             }
         }
     }
 }
+/*
+void Int1_isr() interrupt 2 using 1
+{
+    if (key2 == 0)
+    {
+        Delaykey2();
+        if (key2 == 0)
+        {
+            Key_State++;
+            if (Key_State > 4)
+            {
+                Key_State = 0;
+            }
+        }
+    }
+}
+*/

@@ -9,7 +9,7 @@
 //===============================================================
 #include "stc8h.h"
 #include "intrins.h"
-#include "string.h"
+//#include "string.h"
 #define MAIN_Fosc 22118400L
 
 typedef unsigned char u8;
@@ -23,6 +23,7 @@ typedef unsigned int uint16;
 typedef unsigned long uint32;
 #define TRUE 1
 #define FALSE 0
+// #define NULL 0
 
 #define Baudrate1 115200L
 #define UART1_BUF_LENGTH 8
@@ -94,8 +95,6 @@ enum UART_State
 };
 
 #define Timer0_Reload (65536UL - (MAIN_Fosc / 1000))
-
-u8 Temp_Send_Done = 0;
 
 sbit key1 = P3 ^ 2;
 sbit key2 = P3 ^ 3;
@@ -250,7 +249,7 @@ long DS18B20_GetTemperature()
     return Temp;
 }
 
-/*
+
 int my_strcmp(const char *str1, const char *str2)
 {
     while (*str1 != '\0' && *str2 != '\0')
@@ -264,75 +263,56 @@ int my_strcmp(const char *str1, const char *str2)
     }
     return (unsigned char)*str1 - (unsigned char)*str2;
 }
-*/
 
-/*
-void longToString(long value, char *buffer)
-{
-    int i, j = 0;
+
+void longToString(long value, char *buffer) {
+    int i ,j= 0;
     int isNegative = 0;
 
     // 处理负数
-    if (value < 0)
-    {
+    if (value < 0) {
         isNegative = 1;
         value = -value;
     }
 
     // 将数字转换为字符串
-    do
-    {
+    do {
         buffer[i++] = (value % 10) + '0'; // 获取最低位数字并转换为字符
-        value /= 10;                      // 去掉最低位
+        value /= 10; // 去掉最低位
     } while (value > 0);
 
-    if (isNegative)
-    {
+    if (isNegative) {
         buffer[i++] = '-'; // 添加负号
     }
 
     // 反转字符串
     buffer[i] = '\0'; // 结束字符串
-    for (j = 0; j < i / 2; j++)
-    {
+    for (j = 0; j < i / 2; j++) {
         char temp = buffer[j];
         buffer[j] = buffer[i - j - 1];
         buffer[i - j - 1] = temp;
     }
 }
-void sendTemperature(long temperature)
-{
-    char buffer[20];                   // 用于存储转换后的字符串
+void sendTemperature(long temperature) {
+    char buffer[20]; // 用于存储转换后的字符串
     longToString(temperature, buffer); // 转换为字符串
-    PrintString1(buffer);              // 通过打印函数发送
+    PrintString1(buffer); // 通过打印函数发送
 }
-*/
 
-void testled()
-{
-    P00 = 0;
-    P01 = 0;
-    P02 = 0;
-    delay_ms(1000);
-    P00 = 1;
-    P01 = 1;
-    P02 = 1;
-}
+
 
 void main()
 {
-
-    long temperature; //=================
+    long temperature;//=================
 
     char RX_Data[UART1_BUF_LENGTH] = 0x00;
     unsigned char i = 0x00;
     enum UART_State currentState = UART_IDLE;
 
-    IO_Init();
-    testled();
+    DS18B20_readpower();//=====================
+    DS18B20_SetResolution(12);//======================
 
-    DS18B20_readpower();       //=====================
-    DS18B20_SetResolution(12); //======================
+    IO_Init();
 
     UART1_config(1);
     EA = 1;
@@ -373,6 +353,7 @@ void main()
     PWMA_BKR = 0x80;
     PWMA_CR1 |= 0x01;
 
+    P40 = 0;
     UART1_config(1);
 
     delay_ms(1);
@@ -415,29 +396,11 @@ void main()
                 receiving_complete = 0;
             }
         }
-        else if (Key_Switch == 2)
+        else if(Key_Switch == 2)
         {
-            /*
-            Temp_Send_Done = 0;
             temperature = DS18B20_GetTemperature();
             sendTemperature(temperature);
-            // delay_ms(200);
-            Temp_Send_Done = 1;
-            */
-            temperature = DS18B20_GetTemperature();
-            if (temperature < 26)
-                Temp_State = 0;
-            if (temperature >= 26 && temperature < 27)
-                Temp_State = 1;
-            if (temperature >= 27 && temperature < 28)
-                Temp_State = 2;
-            if (temperature >= 28 && temperature < 29)
-                Temp_State = 3;
-            if (temperature >= 29 && temperature < 30)
-                Temp_State = 4;
-            if (temperature >= 30 && temperature < 45)
-                Temp_State = 5;
-            delay_ms(100);
+            delay_ms(200);
         }
     }
 }
@@ -492,43 +455,44 @@ void Ctrl_LED(unsigned char *rxdata)
 {
 
     Shutdown_LED();
-    if (strcmp(rxdata, "FAN0") == 0)
+    //=============================
+    if (my_strcmp(rxdata, "FAN0") == 0)
     {
         Uart_State = 0;
     }
-    else if (strcmp(rxdata, "FAN1") == 0)
+    else if (my_strcmp(rxdata, "FAN1") == 0)
     {
         Uart_State = 1;
     }
-    else if (strcmp(rxdata, "FAN2") == 0)
+    else if (my_strcmp(rxdata, "FAN2") == 0)
     {
         Uart_State = 2;
     }
-    else if (strcmp(rxdata, "FAN3") == 0)
+    else if (my_strcmp(rxdata, "FAN3") == 0)
     {
         Uart_State = 3;
     }
-    else if (strcmp(rxdata, "FAN4") == 0)
+    else if (my_strcmp(rxdata, "FAN4") == 0)
     {
         Uart_State = 4;
     }
-    else if (strcmp(rxdata, "FAN5") == 0)
+    else if (my_strcmp(rxdata, "FAN5") == 0)
     {
         Uart_State = 5;
     }
-    else if (strcmp(rxdata, "FAN6") == 0)
+    else if (my_strcmp(rxdata, "FAN6") == 0)
     {
         Uart_State = 6;
     }
-    else if (strcmp(rxdata, "FAN7") == 0)
+    else if (my_strcmp(rxdata, "FAN7") == 0)
     {
         Uart_State = 7;
     }
-    else if (strcmp(rxdata, "FAN8") == 0)
+    else if (my_strcmp(rxdata, "FAN8") == 0)
     {
         Uart_State = 8;
     }
-    else if (strcmp(rxdata, "FAN9") == 0)
+    else if (my_strcmp(rxdata, "FAN9") == 0)
     {
         Uart_State = 9;
     }
@@ -604,7 +568,7 @@ void UART1_int(void) interrupt 4
         {
             if (++RX1_Cnt >= UART1_BUF_LENGTH)
             {
-                RX1_Cnt = 0;
+                RX1_Cnt = 0; // ?陇?0?8?0鈥?0?0?1?0?6?0?4?0鈥?6?0?2
             }
         }
     }
@@ -692,21 +656,9 @@ void timer0(void) interrupt 3 using 2
     {
         P02 = 0;
         P00 = P01 = 1;
-
         Key_State = 0;
         Uart_State = 0;
-        if (Temp_State == 0)
-            PWM1_Duty = 0;
-        if (Temp_State == 1)
-            PWM1_Duty = 350;
-        if (Temp_State == 2)
-            PWM1_Duty = 500;
-        if (Temp_State == 3)
-            PWM1_Duty = 650;
-        if (Temp_State == 4)
-            PWM1_Duty = 800;
-        if (Temp_State == 5)
-            PWM1_Duty = 1023;
+        PWM1_Duty = 1023;
     }
     UpdatePwm();
 }
@@ -725,7 +677,7 @@ void Int0_isr() interrupt 0 using 0
         if (key1 == 0)
         {
             Key_Switch++;
-            if (Key_Switch >= 3)
+            if (Key_Switch > 2)
             {
                 Key_Switch = 0;
             }
